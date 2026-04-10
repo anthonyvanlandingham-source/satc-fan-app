@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SATC — NYC Locations</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --gold: #C9A84C;
+    --gold-light: #E8C96A;
+    --gold-pale: #F5E9C8;
+    --ink: #1A1612;
+    --ink-mid: #2E2820;
+    --paper: #F7F2E8;
+    --paper-dark: #EDE5D4;
+    --muted: #7A6E60;
+    --open-color: #4A8C6F;
+    --closed-color: #8C4A4A;
+    --iconic-color: #C9A84C;
+  }
+
+  html, body { height: 100%; overflow: hidden; font-family: 'DM Sans', sans-serif; background: var(--ink); }
+
+  /* ── HEADER ── */
+  #header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    background: var(--ink);
+    border-bottom: 1px solid rgba(201,168,76,0.3);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 60px;
+  }
+  #header .brand {
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  #header .brand-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px; color: var(--gold); letter-spacing: 0.02em;
+  }
+  #header .brand-sub {
+    font-size: 11px; color: var(--muted); letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  #header .filters {
+    display: flex; gap: 8px; align-items: center;
+  }
+  .filter-btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px; font-weight: 500;
+    padding: 5px 12px; border-radius: 20px;
+    border: 1px solid rgba(201,168,76,0.35);
+    background: transparent; color: var(--muted);
+    cursor: pointer; transition: all 0.2s; letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .filter-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .filter-btn.active { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 500; }
+  #header .count {
+    font-size: 12px; color: var(--muted); margin-left: 8px;
+    padding-left: 16px; border-left: 1px solid rgba(201,168,76,0.2);
+  }
+
+  /* ── MAP ── */
+  #map {
+    position: fixed; top: 60px; left: 0; right: 0; bottom: 0;
+    z-index: 1;
+  }
+
+  /* ── DETAIL PANEL ── */
+  #panel {
+    position: fixed; top: 60px; right: 0; bottom: 0;
+    width: 380px; z-index: 500;
+    background: var(--paper);
+    border-left: 1px solid var(--paper-dark);
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto; display: flex; flex-direction: column;
+  }
+  #panel.open { transform: translateX(0); }
+
+  #panel-close {
+    position: absolute; top: 16px; right: 16px;
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--paper-dark); border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 18px; z-index: 10;
+    transition: background 0.15s;
+  }
+  #panel-close:hover { background: var(--ink); color: var(--gold); }
+
+  #panel-image {
+    width: 100%; height: 200px; object-fit: cover;
+    background: var(--ink-mid);
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #panel-image-placeholder {
+    width: 100%; height: 200px;
+    background: linear-gradient(135deg, var(--ink) 0%, var(--ink-mid) 100%);
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 8px; flex-shrink: 0;
+  }
+  #panel-image-placeholder .pin-large {
+    font-size: 48px; opacity: 0.4;
+  }
+  #panel-image-placeholder .neighborhood-label {
+    font-size: 11px; color: var(--muted); letter-spacing: 0.12em; text-transform: uppercase;
+  }
+
+  #panel-body { padding: 24px; flex: 1; }
+
+  #panel-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  .badge {
+    font-size: 10px; font-weight: 500; padding: 3px 9px; border-radius: 20px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .badge-open { background: #D4EDDE; color: #1D5C38; }
+  .badge-closed { background: #F5D5D5; color: #7A1A1A; }
+  .badge-iconic { background: var(--gold-pale); color: #7A5A10; }
+  .badge-type { background: var(--paper-dark); color: var(--muted); }
+
+  #panel-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px; line-height: 1.2; color: var(--ink);
+    margin-bottom: 4px;
+  }
+  #panel-address {
+    font-size: 13px; color: var(--muted); margin-bottom: 20px;
+  }
+
+  .panel-section { margin-bottom: 20px; }
+  .panel-section-label {
+    font-size: 10px; font-weight: 500; color: var(--gold);
+    letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px;
+  }
+  .panel-section-text {
+    font-size: 14px; color: var(--ink-mid); line-height: 1.6;
+  }
+
+  .episode-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .episode-tag {
+    font-size: 11px; background: var(--paper-dark); color: var(--muted);
+    padding: 3px 9px; border-radius: 4px;
+  }
+
+  .status-banner {
+    border-radius: 8px; padding: 12px 14px; margin-bottom: 20px;
+    font-size: 13px; line-height: 1.5;
+  }
+  .status-banner.closed { background: #FDF0F0; border-left: 3px solid var(--closed-color); color: #5A1A1A; }
+  .status-banner.open { background: #F0F8F4; border-left: 3px solid var(--open-color); color: #1A3D28; }
+  .status-banner strong { display: block; margin-bottom: 2px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  #panel-gmaps {
+    display: block; margin-top: 8px;
+    font-size: 12px; color: var(--gold); text-decoration: none;
+    display: flex; align-items: center; gap: 5px;
+  }
+  #panel-gmaps:hover { color: var(--gold-light); }
+
+  /* ── LEGEND ── */
+  #legend {
+    position: fixed; bottom: 20px; left: 20px; z-index: 500;
+    background: rgba(26,22,18,0.92);
+    border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 10px; padding: 12px 16px;
+    backdrop-filter: blur(8px);
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: var(--muted); margin-bottom: 6px;
+  }
+  .legend-item:last-child { margin-bottom: 0; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── LOCATION COUNT BADGE ── */
+  #loc-count {
+    position: fixed; bottom: 20px; right: 20px; z-index: 500;
+    background: rgba(26,22,18,0.92);
+    border: 1px solid rgba(201,168,76,0.25);
+    border-radius: 10px; padding: 10px 16px;
+    font-size: 12px; color: var(--muted);
+    backdrop-filter: blur(8px);
+  }
+  #loc-count span { color: var(--gold); font-weight: 500; font-size: 18px; display: block; }
+
+  /* ── LEAFLET CUSTOM MARKERS ── */
+  .custom-pin {
+    width: 28px; height: 36px; position: relative; cursor: pointer;
+  }
+  .custom-pin svg { width: 100%; height: 100%; }
+  .custom-pin:hover svg .pin-body { filter: brightness(1.3); }
+
+  /* Leaflet popup override */
+  .leaflet-popup-content-wrapper {
+    background: var(--ink); border: 1px solid rgba(201,168,76,0.4);
+    border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    padding: 0;
+  }
+  .leaflet-popup-content {
+    margin: 12px 16px; font-family: 'DM Sans', sans-serif;
+  }
+  .leaflet-popup-tip { background: var(--ink); }
+  .leaflet-popup-close-button { color: var(--muted) !important; top: 8px !important; right: 10px !important; }
+  .popup-name { font-family: 'Playfair Display', serif; font-size: 14px; color: var(--gold); margin-bottom: 3px; }
+  .popup-neighborhood { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .popup-status { font-size: 11px; }
+  .popup-open { color: #4A8C6F; }
+  .popup-closed { color: #8C4A4A; }
+  .popup-more { font-size: 11px; color: var(--gold); margin-top: 8px; cursor: pointer; border: none; background: none; padding: 0; font-family: 'DM Sans', sans-serif; display: block; }
+  .popup-more:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="brand">
+    <span class="brand-title">Sex & the City</span>
+    <span class="brand-sub">NYC Locations</span>
+  </div>
+  <div class="filters">
+    <button class="filter-btn active" onclick="setFilter('all', this)">All</button>
+    <button class="filter-btn" onclick="setFilter('iconic', this)">Iconic</button>
+    <button class="filter-btn" onclick="setFilter('open', this)">Still Open</button>
+    <button class="filter-btn" onclick="setFilter('closed', this)">Closed / Historical</button>
+    <button class="filter-btn" onclick="setFilter('carrie', this)">Carrie's Story</button>
+    <span class="count" id="filter-count">36 locations</span>
+  </div>
+</div>
+
+<div id="map"></div>
+
+<div id="panel">
+  <button id="panel-close" onclick="closePanel()">✕</button>
+  <div id="panel-image-placeholder">
+    <div class="pin-large">📍</div>
+    <div class="neighborhood-label" id="panel-neighborhood"></div>
+  </div>
+  <div id="panel-body">
+    <div id="panel-badges"></div>
+    <div id="panel-name"></div>
+    <div id="panel-address"></div>
+    <div id="panel-status-banner"></div>
+    <div class="panel-section" id="panel-scene-section">
+      <div class="panel-section-label">What Happened Here</div>
+      <div class="panel-section-text" id="panel-scene"></div>
+    </div>
+    <div class="panel-section" id="panel-episodes-section">
+      <div class="panel-section-label">Featured In</div>
+      <div class="episode-tags" id="panel-episodes"></div>
+    </div>
+    <a id="panel-gmaps" href="#" target="_blank">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      View on Google Maps
+    </a>
+  </div>
+</div>
+
+<div id="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#C9A84C"></div>Iconic location</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#4A8C6F"></div>Still open</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#8C4A4A"></div>Closed / historical</div>
+</div>
+
+<div id="loc-count">
+  <span id="visible-count">36</span>
+  locations
+</div>
+
+<script>
+const LOCATIONS = [
+  { id:"LOC001", name:"Carrie's Brownstone", address:"66 Perry Street", neighborhood:"West Village", lat:40.7355, lng:-74.0024, type:"Apartment", status:"Open", iconic:true, carrie:true, scene:"Exterior stoop used for countless scenes throughout the series. One of TV's most photographed addresses.", episodes:"All seasons", still_open:true, closed_notes:"", whats_there_now:"Private residence — view from sidewalk only" },
+  { id:"LOC002", name:"Magnolia Bakery", address:"401 Bleecker Street", neighborhood:"West Village", lat:40.7324, lng:-74.0035, type:"Cafe", status:"Open", iconic:true, carrie:true, scene:"Carrie and Miranda share cupcakes and heart-to-heart conversations here.", episodes:"S3E5, S4E7, Multiple", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC003", name:"Loeb Boathouse", address:"East 72nd St & Park Drive North", neighborhood:"Central Park", lat:40.7756, lng:-73.9706, type:"Restaurant", status:"Closed", iconic:true, carrie:true, scene:"Carrie and Big have lunch and both accidentally fall into the lake — one of the series' most memorable moments.", episodes:"S3 Finale", still_open:false, closed_notes:"Closed December 2022", whats_there_now:"Space being redeveloped by Central Park Conservancy" },
+  { id:"LOC004", name:"The Plaza Hotel", address:"768 Fifth Avenue", neighborhood:"Midtown", lat:40.7645, lng:-73.9744, type:"Hotel", status:"Open", iconic:true, carrie:true, scene:"Big's engagement party to Natasha. Also Carrie's famous 'Old New York' moment in her Vivienne Westwood gown in the first film.", episodes:"S2E18 + SATC Movie", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC005", name:"New York Public Library", address:"476 Fifth Avenue", neighborhood:"Midtown", lat:40.7532, lng:-73.9822, type:"Landmark", status:"Open", iconic:true, carrie:true, scene:"The planned venue for Carrie and Big's ill-fated wedding. Carrie runs down the iconic steps when Big doesn't show.", episodes:"SATC Movie", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC006", name:"Brooklyn Bridge", address:"Brooklyn Bridge", neighborhood:"Lower Manhattan", lat:40.7061, lng:-73.9969, type:"Landmark", status:"Open", iconic:true, carrie:false, scene:"Miranda and Steve meet in the middle of the bridge and decide to reconcile and give their marriage another chance.", episodes:"SATC Movie", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC007", name:"Jefferson Market Garden", address:"Greenwich Ave & W 10th St", neighborhood:"West Village", lat:40.7344, lng:-74.0002, type:"Garden", status:"Open", iconic:true, carrie:false, scene:"Miranda and Steve's wedding venue. In the series they stumble upon it and Miranda decides it's perfect.", episodes:"S4", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC008", name:"Columbus Circle Fountain", address:"Columbus Circle", neighborhood:"Upper West Side", lat:40.7681, lng:-73.9819, type:"Landmark", status:"Open", iconic:false, carrie:true, scene:"Carrie and Aidan's second breakup. She admits she doesn't really want to marry him.", episodes:"S4", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC009", name:"Louis K. Meisel Gallery", address:"141 Prince Street", neighborhood:"SoHo", lat:40.7261, lng:-74.0003, type:"Gallery", status:"Open", iconic:false, carrie:false, scene:"Charlotte's art gallery where she worked for the first four seasons before leaving to marry Trey.", episodes:"S1–S4", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC010", name:"Yankee Stadium", address:"1 East 161st Street", neighborhood:"The Bronx", lat:40.8296, lng:-73.9262, type:"Stadium", status:"Open", iconic:false, carrie:true, scene:"Carrie attends a Yankees game to distract herself after breaking up with Big.", episodes:"S2E1", still_open:true, closed_notes:"New stadium opened 2009", whats_there_now:"Original demolished — new stadium same location" },
+  { id:"LOC011", name:"Bryant Park", address:"42nd Street & 6th Avenue", neighborhood:"Midtown", lat:40.7536, lng:-73.9832, type:"Park", status:"Open", iconic:false, carrie:true, scene:"NYC Fashion Week tent recreated here for SATC Movie. Also where Carrie and Big meet at 3am to 'stand still' with each other.", episodes:"SATC Movie + Multiple", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC012", name:"Buddakan", address:"75 Ninth Avenue", neighborhood:"Chelsea", lat:40.7424, lng:-74.0051, type:"Restaurant", status:"Open", iconic:true, carrie:true, scene:"The lavish rehearsal dinner for Carrie and Big in the first movie. One of NYC's most dramatic dining rooms.", episodes:"SATC Movie", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC013", name:"Tiffany & Co.", address:"727 Fifth Avenue", neighborhood:"Midtown", lat:40.7627, lng:-73.9727, type:"Retail", status:"Open", iconic:true, carrie:false, scene:"Charlotte's re-proposal from Trey happens on the steps outside. The Blue Box Cafe inside is now a pilgrimage spot.", episodes:"S3", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC014", name:"Bergdorf Goodman", address:"754 Fifth Avenue", neighborhood:"Midtown", lat:40.7643, lng:-73.9731, type:"Retail", status:"Open", iconic:false, carrie:false, scene:"The girls shop here in SATC 2's opening sequence.", episodes:"SATC 2", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC015", name:"Barneys New York", address:"660 Madison Avenue", neighborhood:"Upper East Side", lat:40.7643, lng:-73.9703, type:"Retail", status:"Closed", iconic:false, carrie:true, scene:"Carrie and Charlotte shop here. Carrie buys shoes from a salesman played by Andy Cohen.", episodes:"Multiple", still_open:false, closed_notes:"Closed 2020 after bankruptcy filing", whats_there_now:"Luxury residential and retail space" },
+  { id:"LOC016", name:"Bloomingdale's", address:"1000 Third Avenue", neighborhood:"Upper East Side", lat:40.7621, lng:-73.9674, type:"Retail", status:"Open", iconic:false, carrie:false, scene:"Carrie was working in the dress department here in 1989 when she first met Miranda, according to SATC 2.", episodes:"SATC 2", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC017", name:"Manolo Blahnik Boutique", address:"31 West 54th Street", neighborhood:"Midtown", lat:40.7614, lng:-73.9773, type:"Retail", status:"Open", iconic:true, carrie:true, scene:"Carrie's ultimate obsession. Mentioned and visited throughout the entire series run.", episodes:"Multiple", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC018", name:"Soho House New York", address:"29-35 Ninth Avenue", neighborhood:"Meatpacking District", lat:40.7418, lng:-74.0067, type:"Club", status:"Open", iconic:false, carrie:false, scene:"Samantha desperately tries to get access to the rooftop pool in Season 6, shortly after it opened.", episodes:"S6", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC019", name:"Bemelmans Bar at The Carlyle", address:"35 East 76th Street", neighborhood:"Upper East Side", lat:40.7736, lng:-73.9635, type:"Bar", status:"Open", iconic:false, carrie:true, scene:"Carrie and her assistant Louise commiserate over broken hearts in this iconic art deco bar with famous murals.", episodes:"SATC Movie", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC020", name:"O'Nieal's Bar (Scout)", address:"174 Grand Street", neighborhood:"SoHo", lat:40.7194, lng:-74.0031, type:"Bar", status:"Open", iconic:false, carrie:false, scene:"The filming location for Scout, the bar that Steve and Aidan open together. Current owners welcome SATC fans.", episodes:"Multiple", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC021", name:"Pastis", address:"52 Gansevoort Street", neighborhood:"Meatpacking District", lat:40.7408, lng:-74.0072, type:"Restaurant", status:"Open", iconic:false, carrie:true, scene:"The girls brunch here. Samantha complains the neighborhood has been cleaned up too much. Miranda protests the $20 burger.", episodes:"Multiple", still_open:true, closed_notes:"Original closed 2014 — reopened 2019 at new address", whats_there_now:"" },
+  { id:"LOC022", name:"The Modern at MoMA", address:"9 West 53rd Street", neighborhood:"Midtown", lat:40.7614, lng:-73.9776, type:"Restaurant", status:"Open", iconic:false, carrie:false, scene:"Charlotte announces Carrie's engagement here to appreciative fellow diners.", episodes:"SATC Movie", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC023", name:"Russian Tea Room", address:"150 West 57th Street", neighborhood:"Midtown", lat:40.7651, lng:-73.9796, type:"Restaurant", status:"Open", iconic:false, carrie:true, scene:"Carrie and Alexandr Petrovsky's memorable first date — the beginning of her final relationship before Big.", episodes:"S6", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC024", name:"Eleven Madison Park", address:"11 Madison Avenue", neighborhood:"Flatiron", lat:40.7416, lng:-73.9872, type:"Restaurant", status:"Open", iconic:false, carrie:true, scene:"Big shockingly reveals his engagement to Natasha at dinner here.", episodes:"S2", still_open:true, closed_notes:"", whats_there_now:"Now plant-based menu" },
+  { id:"LOC025", name:"Diane Von Furstenberg Store", address:"440 West 14th Street", neighborhood:"Meatpacking District", lat:40.7408, lng:-74.0072, type:"Retail", status:"Open", iconic:false, carrie:true, scene:"Carrie phones Samantha from here in the first movie. The final cocktail scene interior was also filmed inside.", episodes:"SATC Movie", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC026", name:"Good World Bar & Grill", address:"3 Orchard Street", neighborhood:"Lower East Side", lat:40.7157, lng:-73.9918, type:"Bar", status:"Closed", iconic:false, carrie:false, scene:"The Swedish-themed bar in an old barbershop where Miranda and Steve have a tense confrontation in the first movie.", episodes:"SATC Movie", still_open:false, closed_notes:"Closed", whats_there_now:"Area has changed significantly" },
+  { id:"LOC027", name:"Central Park Carousel", address:"Mid-Park at 64th Street", neighborhood:"Central Park", lat:40.7679, lng:-73.9736, type:"Landmark", status:"Open", iconic:false, carrie:false, scene:"Charlotte and Harry take daughter Lily to the carousel in the first SATC movie.", episodes:"SATC Movie", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC028", name:"Ladies' Pavilion, Central Park", address:"West 75th St at Central Park Lake", neighborhood:"Central Park", lat:40.7778, lng:-73.9762, type:"Landmark", status:"Open", iconic:false, carrie:true, scene:"Miranda seeks forgiveness from Carrie here. The cast-iron Victorian pavilion frames their reconciliation beautifully.", episodes:"SATC Movie", still_open:true, closed_notes:"Built 1871", whats_there_now:"" },
+  { id:"LOC029", name:"Samantha's Apartment Exterior", address:"300 Gansevoort Street", neighborhood:"Meatpacking District", lat:40.7401, lng:-74.0069, type:"Apartment", status:"Open", iconic:false, carrie:false, scene:"Samantha's Meatpacking District apartment. She was proud to live there 'before it was cool.'", episodes:"S3–S6", still_open:true, closed_notes:"", whats_there_now:"Now premium real estate" },
+  { id:"LOC030", name:"Charlotte's Park Avenue Building", address:"930 Park Avenue", neighborhood:"Upper East Side", lat:40.7758, lng:-73.9592, type:"Apartment", status:"Open", iconic:false, carrie:false, scene:"Charlotte and Trey's elegant Park Avenue apartment. Scene of her 'Elizabeth Taylor moment' and the SATC Movie bridal party departure.", episodes:"S3–S6 + SATC Movie", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC031", name:"O'Nieal's at Grand Street", address:"1 Grand Street", neighborhood:"SoHo", lat:40.7197, lng:-74.0027, type:"Bar", status:"Open", iconic:false, carrie:false, scene:"Bar featured as the neighborhood hangout for the group in several SoHo scenes.", episodes:"Multiple", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC032", name:"Tiffany Blue Box Cafe", address:"727 Fifth Avenue, 4th Floor", neighborhood:"Midtown", lat:40.7629, lng:-73.9729, type:"Cafe", status:"Open", iconic:true, carrie:false, scene:"While not in the original series, this became a SATC pilgrimage spot after the iconic Tiffany scenes.", episodes:"Pilgrimage", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC033", name:"Cafe Lalo", address:"201 West 83rd Street", neighborhood:"Upper West Side", lat:40.7847, lng:-73.9800, type:"Cafe", status:"Open", iconic:false, carrie:false, scene:"Neighborhood cafe frequented throughout the series. Also famous as the cafe from You've Got Mail.", episodes:"Multiple", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC034", name:"Florent (Meatpacking era)", address:"69 Gansevoort Street", neighborhood:"Meatpacking District", lat:40.7401, lng:-74.0076, type:"Restaurant", status:"Closed", iconic:false, carrie:false, scene:"Classic 24-hour French diner that defined the Meatpacking District before gentrification. Featured in early seasons.", episodes:"S1–S2", still_open:false, closed_notes:"Closed 2008 after 24 years", whats_there_now:"High-end retail and restaurants now dominate the block" },
+  { id:"LOC035", name:"Monkey Bar", address:"60 East 54th Street", neighborhood:"Midtown", lat:40.7589, lng:-73.9749, type:"Bar", status:"Open", iconic:false, carrie:true, scene:"Featured in AJLT as a location Carrie frequents. Art deco bar with famous colorful murals inside Hotel Elysee.", episodes:"AJLT", still_open:true, closed_notes:"", whats_there_now:"" },
+  { id:"LOC036", name:"Webster Hall", address:"125 East 11th Street", neighborhood:"East Village", lat:40.7310, lng:-73.9883, type:"Nightclub", status:"Open", iconic:false, carrie:false, scene:"East Village nightclub featured in early seasons party scenes. One of NYC's oldest music venues.", episodes:"S1–S3", still_open:true, closed_notes:"Operating since 1953", whats_there_now:"" }
+];
+
+let map, markers = [], currentFilter = 'all';
+
+function getPinColor(loc) {
+  if (loc.iconic) return '#C9A84C';
+  if (!loc.still_open) return '#8C4A4A';
+  return '#4A8C6F';
+}
+
+function createPinIcon(loc) {
+  const color = getPinColor(loc);
+  const size = loc.iconic ? 36 : 28;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 32" width="${size}" height="${size*1.33}">
+    <path d="M12 0C5.373 0 0 5.373 0 12c0 9 12 20 12 20s12-11 12-20C24 5.373 18.627 0 12 0z" fill="${color}" opacity="0.95"/>
+    <circle cx="12" cy="12" r="5" fill="white" opacity="0.9"/>
+    ${loc.iconic ? `<circle cx="12" cy="12" r="2.5" fill="${color}"/>` : ''}
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: '',
+    iconSize: [size, size * 1.33],
+    iconAnchor: [size/2, size * 1.33],
+    popupAnchor: [0, -size * 1.33]
+  });
+}
+
+function openPanel(loc) {
+  document.getElementById('panel-name').textContent = loc.name;
+  document.getElementById('panel-address').textContent = loc.address + ', ' + loc.neighborhood;
+  document.getElementById('panel-neighborhood').textContent = loc.neighborhood;
+  document.getElementById('panel-scene').textContent = loc.scene;
+
+  const epContainer = document.getElementById('panel-episodes');
+  epContainer.innerHTML = '';
+  loc.episodes.split(',').forEach(ep => {
+    const tag = document.createElement('span');
+    tag.className = 'episode-tag';
+    tag.textContent = ep.trim();
+    epContainer.appendChild(tag);
+  });
+
+  const badges = document.getElementById('panel-badges');
+  badges.innerHTML = '';
+  if (loc.iconic) badges.innerHTML += `<span class="badge badge-iconic">★ Iconic</span>`;
+  badges.innerHTML += `<span class="badge ${loc.still_open ? 'badge-open' : 'badge-closed'}">${loc.still_open ? 'Open' : 'Closed'}</span>`;
+  badges.innerHTML += `<span class="badge badge-type">${loc.type}</span>`;
+  if (loc.carrie) badges.innerHTML += `<span class="badge badge-iconic">Carrie's Story</span>`;
+
+  const statusBanner = document.getElementById('panel-status-banner');
+  if (!loc.still_open && loc.closed_notes) {
+    statusBanner.innerHTML = `<div class="status-banner closed"><strong>Historical Location</strong>${loc.closed_notes}${loc.whats_there_now ? '<br><em>Today: ' + loc.whats_there_now + '</em>' : ''}</div>`;
+  } else if (loc.whats_there_now && loc.still_open && loc.closed_notes) {
+    statusBanner.innerHTML = `<div class="status-banner open"><strong>Note</strong>${loc.closed_notes}</div>`;
+  } else {
+    statusBanner.innerHTML = '';
+  }
+
+  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${loc.lat},${loc.lng}`;
+  document.getElementById('panel-gmaps').href = mapsUrl;
+
+  document.getElementById('panel').classList.add('open');
+
+  // Resize map to accommodate panel
+  setTimeout(() => map.invalidateSize(), 350);
+}
+
+function closePanel() {
+  document.getElementById('panel').classList.remove('open');
+  setTimeout(() => map.invalidateSize(), 350);
+}
+
+function setFilter(filter, btn) {
+  currentFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyFilter();
+}
+
+function applyFilter() {
+  let visible = 0;
+  markers.forEach(({ marker, loc }) => {
+    let show = false;
+    if (currentFilter === 'all') show = true;
+    else if (currentFilter === 'iconic') show = loc.iconic;
+    else if (currentFilter === 'open') show = loc.still_open;
+    else if (currentFilter === 'closed') show = !loc.still_open;
+    else if (currentFilter === 'carrie') show = loc.carrie;
+
+    if (show) { marker.addTo(map); visible++; }
+    else { marker.remove(); }
+  });
+  document.getElementById('visible-count').textContent = visible;
+  document.getElementById('filter-count').textContent = visible + ' location' + (visible !== 1 ? 's' : '');
+}
+
+// Init map
+window.addEventListener('load', () => {
+  map = L.map('map', {
+    center: [40.7484, -73.9967],
+    zoom: 13,
+    zoomControl: true
+  });
+
+  // Dark/editorial tile layer
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap contributors © CARTO',
+    maxZoom: 19
+  }).addTo(map);
+
+  LOCATIONS.forEach(loc => {
+    const marker = L.marker([loc.lat, loc.lng], { icon: createPinIcon(loc) });
+
+    const popupHTML = `
+      <div style="min-width:180px">
+        <div class="popup-name">${loc.name}</div>
+        <div class="popup-neighborhood">${loc.neighborhood}</div>
+        <div class="popup-status ${loc.still_open ? 'popup-open' : 'popup-closed'}">
+          ${loc.still_open ? '● Open' : '● Closed / Historical'}
+        </div>
+        <button class="popup-more" onclick="openPanel(LOCATIONS.find(l=>l.id==='${loc.id}'))">View details →</button>
+      </div>`;
+
+    marker.bindPopup(popupHTML, { maxWidth: 240 });
+    marker.on('click', () => openPanel(loc));
+    marker.addTo(map);
+    markers.push({ marker, loc });
+  });
+});
+</script>
+</body>
+</html>
